@@ -16,14 +16,20 @@ class Skin:
         sSepRGB = CurMat.nodes.new("ShaderNodeSeparateRGB")
         sSepRGB.location = (-600,250)
 
+        sMultiply = CurMat.nodes.new("ShaderNodeMath")
+        sMultiply.location = (-400,250)
+        sMultiply.operation = 'MULTIPLY'
+        sMultiply.inputs[1].default_value = (0.05)
+
         CurMat.links.new(sVcol.outputs[0],sSepRGB.inputs[0])
-        CurMat.links.new(sSepRGB.outputs[1],CurMat.nodes['Principled BSDF'].inputs['Subsurface'])
+        CurMat.links.new(sSepRGB.outputs[1],sMultiply.inputs[0])
+        CurMat.links.new(sMultiply.outputs[0],CurMat.nodes['Principled BSDF'].inputs['Subsurface'])
         CurMat.nodes['Principled BSDF'].inputs['Subsurface Color'].default_value = (0.8, 0.14908, 0.0825199, 1)
 
 #NORMAL/n
         if "Normal" in Data:
             nMap = CreateShaderNodeNormalMap(CurMat, self.BasePath + Data["Normal"], -200,-250, "Normal",self.image_format)
-            CurMat.links.new(nMap.outputs[0],CurMat.nodes['Principled BSDF'].inputs['Normal'])
+            #CurMat.links.new(nMap.outputs[0],CurMat.nodes['Principled BSDF'].inputs['Normal'])
         
 #Albedo/a
         mixRGB = CurMat.nodes.new("ShaderNodeMixRGB")
@@ -57,9 +63,10 @@ class Skin:
 
         if "DetailNormal" in Data:
             ndMap = CreateShaderNodeNormalMap(CurMat, self.BasePath + Data["DetailNormal"], -550,-250, "DetailNormal",self.image_format)
-            if "DetailNormalInfluence" in Data:
-                ndInfluence = CreateShaderNodeValue(CurMat, Data["DetailNormalInfluence"],-1200,-550,"DetailNormalInfluence")
-                CurMat.links.new(ndInfluence.outputs[0],ndMap.inputs[0])
+
+        if "DetailNormalInfluence" in Data:
+            ndInfluence = CreateShaderNodeValue(CurMat, Data["DetailNormalInfluence"],-1200,-550,"DetailNormalInfluence")
+            CurMat.links.new(ndInfluence.outputs[0],ndMap.inputs[0])
 
         if "Detailmap_Squash" in Data:
             ndSqImgNode = CreateShaderNodeNormalMap(CurMat, self.BasePath + Data["Detailmap_Squash"], -1500,50, "Detailmap_Squash",self.image_format)
@@ -67,22 +74,50 @@ class Skin:
         if "Detailmap_Stretch" in Data:
             ndStImg = CreateShaderNodeNormalMap(CurMat, self.BasePath + Data["Detailmap_Stretch"], -1500,0, "Detailmap_Stretch",self.image_format)
 
-        if "MicroDetail" in Data:
-            mdMap = CreateShaderNodeNormalMap(CurMat, self.BasePath + Data["MicroDetail"], -1200,-700, "MicroDetail",self.image_format)
-
         mdMappingNode = CurMat.nodes.new("ShaderNodeMapping")
         mdMappingNode.label = "MicroDetailUVMapping"
         mdMappingNode.location = (-1400,-700)
+        mdMappingMode.hide = True
+
         if "MicroDetailUVScale01" in Data:
             mdMappingNode.inputs[3].default_value[0] = float(Data["MicroDetailUVScale01"])
         if "MicroDetailUVScale02" in Data:
             mdMappingNode.inputs[3].default_value[1] = float(Data["MicroDetailUVScale02"])
 
+        if "MicroDetail" in Data:
+            mdMap = CreateShaderNodeNormalMap(CurMat, self.BasePath + Data["MicroDetail"], -1200,-700, "MicroDetail",self.image_format, uvMapNode=mdMappingNode)
+
         if "MicroDetailInfluence" in Data:
             mdInfluence = CreateShaderNodeValue(CurMat, Data["MicroDetailInfluence"],-1200,-650,"MicroDetailInfluence")
+            CurMat.links.new(mdInfluence.outputs[0],mdMap.inputs[0])
 
         if "BloodColor" in Data:
             bfColor = CreateShaderNodeRGB(CurMat, Data["BloodColor"],-1500,300,"BloodColor")
 
         if "Bloodflow" in Data:
             bfImgNode = CreateShaderNodeTexImage(CurMat,self.BasePath + Data["Bloodflow"], -1500,350, "Bloodflow",self.image_format)
+
+
+        # now connect the (not squash and stretch maps) together if we can
+        if mdMap and ndMap and nMap:
+
+            # link the micro details together (default is 'ADD')
+            addVec1 = CurMat.nodes.new("ShaderNodeVectorMath")
+            
+            CurMat.links.new(ndMap.outputs[0], addVec1.inputs[0])
+            CurMat.links.new(mdMap.outputs[0], addVec1.inputs[1])
+
+            # link that to the main normal map (default is 'ADD')
+            addVec2 = CurMat.nodes.new("ShaderNodeVectorMath")
+            
+            CurMat.links.new(nMap.outputs[0], addVec2.inputs[0])
+            CurMat.links.new(addVec1.outputs[0], addVec2.inputs[1])
+
+            # normalize the result
+            normVec = CurMat.nodes.new("ShaderNodeVectorMath")
+            normVec.operation = 'NORMALIZE'
+            
+            CurMat.links.new(addVec2.outputs[0], normVec.inputs[0])
+
+            # and connect to the BSDF
+            CurMat.links.new(normVec.outputs[0],CurMat.nodes['Principled BSDF'].inputs['Normal'])
