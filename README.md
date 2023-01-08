@@ -1,3 +1,8 @@
+# ⚠ Attention! ⚠
+To get the most recent version for WolvenKit >= 8.5, go [here](https://github.com/WolvenKit/Cyberpunk-Blender-add-on)!
+
+---
+
 # Cyberpunk 2077 Research
 
 This repository was created to help study and reverse engineer elements of Cyberpunk 2077 running on REDengine 4. The focus is researching RED4 file formats and engineering solutions for visualizing and modifying them.
